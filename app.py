@@ -2,35 +2,11 @@ import pandas as pd
 import panel as pn
 import plotly.graph_objs as go
 import locale
-import sys
-import os.path
-import pprint
-
-# import certifi
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'libs/swagger-python-client-generated')))
-# sys.path.append('libs/swagger-python-client-generated')
-
-# os.environ['SSL_CERT_FILE'] = certifi.where()
-# os.environ['CURL_CA_BUNDLE'] = ""
-# os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-
-# print(sys.path)
-
-import strava_client
-from strava_client.rest import ApiException
 
 
-strava_client.configuration.access_token = "Bearer ed1aed442638afc20ad4c3e23a4f596a6d371749"
+from strava_client.client import StravaClient
 
-api_instance = strava_client.ActivitiesApi()
-
-try:
-    res = api_instance.get_logged_in_athlete_activities()
-    pprint.pprint(res)
-except ApiException as e:
-    print("Exception raised: %s\n" % e)
-exit()
+api = StravaClient()
 
 
 pn.extension('perspective', 'plotly', 'echarts')
@@ -42,8 +18,9 @@ def get_data():
                        )
 
 df = get_data()
-
 df.info()
+
+activities = api.get_activities()
 
 # print(df.groupby(df["Activity Date"].dt.weekday)["Distance"].sum().reset_index().rename(columns={"Activity Date": "Month", "Distance": "Total Distance (km)"}))
 
@@ -124,6 +101,7 @@ row = pn.Row(
 
 df_months = df.groupby(pd.Grouper(key="Activity Date", freq="M"))["Distance"].sum()
 df_months2 = df.resample("1W", on="Activity Date", offset="1W").agg({"Distance": "sum", "Max Speed": "max"})
+df_month3 = df.groupby([pd.Grouper(key="Activity Date", freq="W-MON"), "Activity Type"])["Distance"].sum()
 
 row2 = pn.Row(
     pn.pane.DataFrame(df_months),
@@ -194,6 +172,10 @@ from time import strftime, gmtime
 
 print(strftime("%B %b", gmtime()))
 
+print(df_months)
+print(df_months.reset_index()['Activity Date'].apply(lambda x: x.month_name(locale="fr_FR.UTF-8") + x.strftime(" %Y")))
+print(df_months.values.tolist())
+
 echart_bar = {
     "tooltip": {
         "trigger": 'axis',
@@ -202,7 +184,7 @@ echart_bar = {
         }
     },
     "xAxis": {
-        "data": df_months.reset_index()['Activity Date'].apply(lambda x: x.month_name(locale="fr") + x.strftime(" %Y"))
+        "data": df_months.reset_index()['Activity Date'].apply(lambda x: x.month_name(locale="fr_FR.UTF-8") + x.strftime(" %Y"))
     },
     "yAxis":{},
     "series": [{
@@ -211,7 +193,27 @@ echart_bar = {
     }]
 }
 
-row3 = pn.Row(pn.pane.ECharts(echart_bar, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"))
+ec2 = {
+    "tooltip": {
+        "trigger": 'axis',
+        "axisPointer": {
+            "type": 'shadow'
+        }
+    },
+    "xAxis":{
+        "data": df_month3.reset_index()['Activity Date'].apply(lambda x: x.strftime("%d-%m"))#x.month_name(locale="fr_FR.UTF-8") + x.strftime(" %Y"))
+    },
+    "yAxis":{},
+    "series": [{
+        "type": "bar",
+        "data": df_month3.values.astype(int).tolist()
+    }]
+}
+
+row3 = pn.Row(
+    pn.pane.ECharts(echart_bar, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"),
+    pn.pane.ECharts(ec2, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"),
+)
 
 pn.template.VanillaTemplate(
     title="Strava analyzer",
