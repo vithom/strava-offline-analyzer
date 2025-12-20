@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 import panel as pn
 import plotly.graph_objs as go
@@ -20,7 +21,33 @@ def get_data():
 df = get_data()
 df.info()
 
-activities = api.get_activities()
+activities = api.get_activities(per_page=200)
+print(activities[0])
+
+df_api = pd.DataFrame([
+    {
+        "Activity Name": a.name,
+        "Activity Date": a.start_date_local,
+        "Sport": a.sport_type.str(),
+        "Distance (km)": round(a.distance / 1000,1),  # convert to km
+        "Moving Time (min)": round(a.moving_time / 60),  # convert to minutes"
+        "Elapsed Time (min)": round(a.elapsed_time / 60),  # convert to minutes
+        "Total Elevation Gain": a.total_elevation_gain,
+        "Average Speed": round(a.average_speed * 3.6,1) if a.average_speed else 0,  # convert to km/h
+        "Max Speed": round(a.max_speed * 3.6,1) if a.max_speed else 0,  # convert to km/h
+        "Average cadence": a.average_cadence
+    }
+    for a in activities
+])
+
+total_dist_api = sum([a.distance for a in activities])
+total_days_on_strava = (datetime.now() - activities[-1].start_date_local.replace(tzinfo=None)).days
+activity_types = set()
+
+for a in activities:
+    activity_types.add(a.sport_type.str())
+
+print(activity_types)
 
 # print(df.groupby(df["Activity Date"].dt.weekday)["Distance"].sum().reset_index().rename(columns={"Activity Date": "Month", "Distance": "Total Distance (km)"}))
 
@@ -33,18 +60,10 @@ activities = api.get_activities()
 
 # component = pn.pane.panel(dff)
 
-row = pn.Row(
-    pn.indicators.Number(
-        name="Total Activities",
-        value=len(df),
-        # format="{value} activities",
-        # sizing_mode="stretch_width"
-    ),
-    pn.indicators.Number(
-        name="Total Distance (km)",
-        value=round(df["Distance"].sum(), 2),
-        # format="{value} km",
-        # sizing_mode="stretch_width"
+summary_row = pn.Row(
+    pn.Column(
+        pn.pane.Markdown(f"# {len(activities)} Activités depuis {total_days_on_strava} jours"),
+        pn.pane.Markdown(f"# {total_dist_api/1000:.0f} km parcourus"),
     ),
     pn.pane.Plotly(
         df.groupby(pd.Grouper(key="Activity Date", freq="M"))["Distance"]
@@ -215,8 +234,13 @@ row3 = pn.Row(
     pn.pane.ECharts(ec2, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"),
 )
 
+tabs = pn.Tabs( ("Résumé global", pn.Column(summary_row, pn.pane.DataFrame(df_api, sizing_mode="stretch_width"),)), sizing_mode="stretch_both" )
+for a in activity_types:
+    tabs.append( (f"# {a}", pn.Column()) )
+
 pn.template.VanillaTemplate(
     title="Strava analyzer",
-    main = [row, row2, row3, pn.pane.Perspective(df, sizing_mode="stretch_both")],
+    # main = [summary_row, row2, row3, pn.pane.Perspective(df, sizing_mode="stretch_both")],
+    main = tabs,
     # accent = "orange"
 ).servable()
