@@ -21,6 +21,17 @@ def get_data():
 df = get_data()
 df.info()
 
+activity_mapping = {
+    "Run": "Course",
+    "Walk": "Marche",
+    "Swim": "Natation",
+    "Ride": "Vélo",
+    "Hike": "Randonnée",
+    "MountainBikeRide": "VTT",
+    "Yoga": "Yoga",
+    "TrailRun": "Trail",
+}
+
 activities = api.get_activities(per_page=200)
 print(activities[0])
 
@@ -28,26 +39,23 @@ df_api = pd.DataFrame([
     {
         "Activity Name": a.name,
         "Activity Date": a.start_date_local,
-        "Sport": a.sport_type.str(),
+        "Sport": activity_mapping[a.sport_type.value],
         "Distance (km)": round(a.distance / 1000,1),  # convert to km
         "Moving Time (min)": round(a.moving_time / 60),  # convert to minutes"
         "Elapsed Time (min)": round(a.elapsed_time / 60),  # convert to minutes
         "Total Elevation Gain": a.total_elevation_gain,
         "Average Speed": round(a.average_speed * 3.6,1) if a.average_speed else 0,  # convert to km/h
         "Max Speed": round(a.max_speed * 3.6,1) if a.max_speed else 0,  # convert to km/h
-        "Average cadence": a.average_cadence
+        # "Average cadence": a.average_cadence
     }
     for a in activities
 ])
 
 total_dist_api = sum([a.distance for a in activities])
 total_days_on_strava = (datetime.now() - activities[-1].start_date_local.replace(tzinfo=None)).days
-activity_types = set()
+activity_types = df_api["Sport"].unique()
 
-for a in activities:
-    activity_types.add(a.sport_type.str())
 
-print(activity_types)
 
 # print(df.groupby(df["Activity Date"].dt.weekday)["Distance"].sum().reset_index().rename(columns={"Activity Date": "Month", "Distance": "Total Distance (km)"}))
 
@@ -234,9 +242,11 @@ row3 = pn.Row(
     pn.pane.ECharts(ec2, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"),
 )
 
-tabs = pn.Tabs( ("Résumé global", pn.Column(summary_row, pn.pane.DataFrame(df_api, sizing_mode="stretch_width"),)), sizing_mode="stretch_both" )
+tabs = pn.Tabs( ("Résumé global", pn.Column(summary_row, row3)),tabs_location="", sizing_mode="stretch_both")
 for a in activity_types:
     tabs.append( (f"# {a}", pn.Column()) )
+
+tabs.append(("Raw data", pn.pane.DataFrame(df_api, sizing_mode="stretch_width")))
 
 pn.template.VanillaTemplate(
     title="Strava analyzer",
