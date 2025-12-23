@@ -51,9 +51,11 @@ df_api = pd.DataFrame([
     for a in activities
 ])
 
+activity_types = df_api["Sport"].unique()
+
+
 total_dist_api = sum([a.distance for a in activities])
 total_days_on_strava = (datetime.now() - activities[-1].start_date_local.replace(tzinfo=None)).days
-activity_types = df_api["Sport"].unique()
 
 
 
@@ -73,6 +75,14 @@ summary_row = pn.Row(
         pn.pane.Markdown(f"# {len(activities)} Activités depuis {total_days_on_strava} jours"),
         pn.pane.Markdown(f"# {total_dist_api/1000:.0f} km parcourus"),
     ),
+    pn.pane.Perspective(
+        df_api,
+        plugin="d3_xy_scatter",
+        columns=["Activity Date", "Distance (km)"],
+        height=300, sizing_mode="stretch_width")
+)
+
+row1 = pn.Row(
     pn.pane.Plotly(
         df.groupby(pd.Grouper(key="Activity Date", freq="M"))["Distance"]
             .sum()
@@ -242,11 +252,12 @@ row3 = pn.Row(
     pn.pane.ECharts(ec2, options={"opts": {"renderer":"svg"}}, height=400, sizing_mode="stretch_width"),
 )
 
-tabs = pn.Tabs( ("Résumé global", pn.Column(summary_row, row3)),tabs_location="", sizing_mode="stretch_both")
+tabs = pn.Tabs( ("Résumé global", pn.Column(summary_row, row1, row2, row3)), dynamic=True, tabs_location="left", sizing_mode="stretch_both")
 for a in activity_types:
     tabs.append( (f"# {a}", pn.Column()) )
 
 tabs.append(("Raw data", pn.pane.DataFrame(df_api, sizing_mode="stretch_width")))
+tabs.append(("Raw data (perspective)", pn.pane.Perspective(df_api, sizing_mode="stretch_both")))
 
 pn.template.VanillaTemplate(
     title="Strava analyzer",
